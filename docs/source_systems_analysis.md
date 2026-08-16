@@ -3,6 +3,38 @@
 Profiling of the six source files before any ingestion. Everything below was measured against the
 actual CSVs in `datasets/`, not assumed.
 
+## Source system interview
+
+The standard questions you'd put to a source-system owner. There is no owner to interview here, so
+these are answered from the files themselves and from the project brief.
+
+### Business context & ownership
+
+| Question | Answer |
+|---|---|
+| Who owns the data? | Two notional systems — a CRM (customers, products, sales) and an ERP (customer demographics, location, product categories). No live owner; files are handed over. |
+| What business process does it support? | Order-to-cash for a bicycle retailer — customers place orders for products sold by the business. |
+| System & data documentation | None provided. This document is the substitute. |
+| Data model & catalog | None provided. Reconstructed by profiling; catalog to be written for gold. |
+
+### Architecture & technology stack
+
+| Question | Answer |
+|---|---|
+| How is data stored? | Flat CSV files. No database access, no API. |
+| Integration capabilities | File extract only — files in folders. Rules out CDC, event streaming, and direct DB querying. |
+
+### Extract & load
+
+| Question | Answer |
+|---|---|
+| Incremental vs full load? | **Full.** The brief requires no historization, and the files carry no change markers or watermark column. |
+| Data scope & historical needs | Latest snapshot only. No history retained. |
+| Expected size of extracts | Small — ~116k rows, 5.4 MB total. Largest file is `sales_details.csv` at 3.4 MB. |
+| Data volume limitations | None at this size. Whole-dataset reload completes in under a second. |
+| How to avoid impacting source performance? | Not applicable — reading files, not querying a live system. This is the main reason file extracts are used in practice. |
+| Authentication & authorization | None required. Local filesystem access via a container mount. |
+
 ## Inventory
 
 | Source | File | Rows | Grain |
@@ -56,7 +88,7 @@ Each of these is a transformation silver must perform. Nothing here is fixed in 
 | Defect | Count | Fix in silver |
 |---|---|---|
 | Duplicate `cst_id` | 6 ids (2–3 rows each) | Keep the latest by `cst_create_date` — `ROW_NUMBER()` window, take rank 1 |
-| Blank `cst_id` | 4 rows | Filtered out by the same dedupe (rank > 1 / null key) |
+| **Junk rows** — no `cst_id`, garbage `cst_key` (`SF566`, `PO25`, `13451235`, `A01Ass`), every other field blank | 4 rows | Dropped by the dedupe filter. Preserved in bronze — asserted by a quality check, since losing them would mean bronze is silently cleaning. |
 | Leading/trailing spaces in names | 29 rows | `TRIM()` on first and last name |
 | `cst_gndr` blank | 4,578 | Map to `'n/a'`; expand `M`/`F` → `Male`/`Female` |
 | `cst_marital_status` blank | 7 | Map to `'n/a'`; expand `M`/`S` → `Married`/`Single` |
@@ -108,6 +140,18 @@ quantity wins.
 ### `erp_px_cat_g1v2` — 37 rows
 
 Clean. No defects found — `CAT`, `SUBCAT`, `MAINTENANCE` are all consistent. Loads as-is.
+
+## File format issue found during ingestion
+
+Three files — `cust_info.csv`, `CUST_AZ12.csv`, `PX_CAT_G1V2.csv` — had **no trailing newline** on
+their final line. `BULK INSERT` with `ROWTERMINATOR = '0x0d0a'` silently discards a final row that
+has no terminator: no error, no warning, one row short.
+
+Fixed by appending `\r\n` to each of the three files. No data value was altered.
+
+This is worth knowing generally — the failure is invisible unless you compare row counts against the
+source. `tests/quality_checks_bronze.sql` asserts exact expected counts for precisely this reason.
+**A count exactly one short is almost always this.**
 
 ## Summary of standardization rules
 

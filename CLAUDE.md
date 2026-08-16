@@ -151,8 +151,8 @@ GUI clients: SSMS is Windows-only. Use Azure Data Studio, DBeaver, or the VS Cod
 - [x] Colima + SQL Server 2022 container running
 - [x] `datawarehouse` database created, schemas `bronze` / `silver` / `gold` in place
 - [x] Source CSVs in `datasets/` (6 files, profiled — see `docs/source_systems_analysis.md`)
-- [ ] Bronze DDL + load procedure
-- [ ] Bronze quality checks
+- [x] Bronze DDL + load procedure
+- [x] Bronze quality checks (25 assertions, all passing)
 - [ ] Silver DDL + load procedure
 - [ ] Gold star-schema views
 
