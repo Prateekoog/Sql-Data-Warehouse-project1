@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# Reference solution — the completed course repo, kept locally for comparison only.
+# Never commit it: it is the answer key, and it is someone else's work.
+sql-data-warehouse-project/
+*.zip
+
+# Local environment
+.env
