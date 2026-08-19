@@ -65,6 +65,7 @@ SELECT
     (LEAD(prd_start_dt) OVER (
         PARTITION BY prd_key ORDER BY prd_start_dt
     ) - INTERVAL '1 day')::DATE
+    FROM bronze.crm_prd_info;
 
 TRUNCATE TABLE silver.crm_sales_details;
 
