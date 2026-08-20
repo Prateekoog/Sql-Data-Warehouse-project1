@@ -1,3 +1,4 @@
+BEGIN;
 TRUNCATE TABLE silver.crm_cust_info;
 
 INSERT INTO silver.crm_cust_info (
@@ -6,7 +7,7 @@ INSERT INTO silver.crm_cust_info (
 )
 SELECT
     cst_id,
-    cst_key,
+    TRIM(cst_key),
     TRIM(cst_firstname),
     TRIM(cst_lastname),
     CASE
@@ -23,7 +24,7 @@ SELECT
 FROM (
     SELECT *,
            ROW_NUMBER() OVER (
-               PARTITION BY cst_id ORDER BY cst_create_date DESC
+               PARTITION BY cst_id ORDER BY cst_create_date DESC NULLS LAST,cst_key
            ) AS rn
     FROM bronze.crm_cust_info
     WHERE cst_id IS NOT NULL
@@ -118,7 +119,7 @@ TRUNCATE TABLE silver.erp_cust_az12;
 INSERT INTO silver.erp_cust_az12 (cid, bdate, gen)
 SELECT
     -- 'NAS' prefix ho toh hatao
-    CASE WHEN cid LIKE 'NAS%' THEN SUBSTRING(cid, 4, LENGTH(cid))
+    CASE WHEN cid LIKE 'NAS%' THEN SUBSTRING(TRIM(cid), 4, LENGTH(TRIM(cid)))
          ELSE cid
     END,
 
@@ -139,7 +140,7 @@ TRUNCATE TABLE silver.erp_loc_a101;
 INSERT INTO silver.erp_loc_a101 (cid, cntry)
 SELECT
     -- hyphen hatao taaki CRM se match kare
-    REPLACE(cid, '-', ''),
+    REPLACE(TRIM(cid), '-', ''),
 
     CASE WHEN TRIM(cntry) = 'DE'          THEN 'Germany'
          WHEN TRIM(cntry) IN ('US','USA') THEN 'United States'
@@ -158,3 +159,4 @@ SELECT
     TRIM(subcat),
     TRIM(maintenance)
 FROM bronze.erp_px_cat_g1v2;
+COMMIT;
