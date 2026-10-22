@@ -1,10 +1,13 @@
 /*
 ===============================================================================
-Create Database and Schemas
+Create Database and Schemas  (PostgreSQL)
 ===============================================================================
 Purpose:
     Creates the 'datawarehouse' database and its three medallion schemas:
     bronze, silver, and gold.
+
+Usage (from the repo root, connected to any other database, e.g. postgres):
+    psql -d postgres -f scripts/init_database.sql
 
 WARNING:
     This script DROPS the 'datawarehouse' database if it already exists.
@@ -13,33 +16,16 @@ WARNING:
 ===============================================================================
 */
 
-USE master;
-GO
-
--- Drop and recreate the 'datawarehouse' database.
--- SINGLE_USER WITH ROLLBACK IMMEDIATE forcibly disconnects any open sessions,
--- otherwise the DROP blocks indefinitely on an idle connection.
-IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'datawarehouse')
-BEGIN
-    ALTER DATABASE datawarehouse SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE datawarehouse;
-END;
-GO
-
+-- WITH (FORCE) disconnects any open sessions first (PostgreSQL 13+);
+-- otherwise the DROP fails while an idle client is still connected.
+DROP DATABASE IF EXISTS datawarehouse WITH (FORCE);
 CREATE DATABASE datawarehouse;
-GO
 
-USE datawarehouse;
-GO
+\c datawarehouse
 
 -- One schema per medallion layer. Schemas (rather than name prefixes in a
 -- single schema) make the layer boundary enforceable and make the layer of any
 -- object obvious from its fully-qualified name.
 CREATE SCHEMA bronze;
-GO
-
 CREATE SCHEMA silver;
-GO
-
 CREATE SCHEMA gold;
-GO

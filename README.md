@@ -1,6 +1,6 @@
 # SQL Data Warehouse
 
-A modern data warehouse built with SQL Server, consolidating sales data from two source systems
+A modern data warehouse built with PostgreSQL, consolidating sales data from two source systems
 (ERP and CRM) into a clean, integrated star schema ready for analytical reporting.
 
 Built on the **medallion architecture** — bronze, silver, gold — with **Kimball dimensional
@@ -53,8 +53,8 @@ including every measured data-quality defect, in
 datasets/          source CSVs (source_crm/, source_erp/)
 scripts/
   init_database.sql        create database + bronze/silver/gold schemas
-  bronze/                  DDL + load procedure
-  silver/                  DDL + load procedure
+  bronze/                  DDL + load script (\copy)
+  silver/                  DDL + transformation script
   gold/                    star-schema view definitions
 tests/                     data-quality checks per layer
 docs/                      architecture, naming conventions, source analysis, data catalog
@@ -62,32 +62,24 @@ docs/                      architecture, naming conventions, source analysis, da
 
 ## Getting started
 
-Requires Docker. SQL Server 2022 runs in a container; on Apple Silicon it runs under Rosetta
-emulation, since there is no arm64 build.
+Requires PostgreSQL 13+ and `psql`. Run every command **from the repo root** — the bronze load
+uses `\copy` with paths relative to where `psql` is started.
 
 ```bash
-# set your SA password
-cp .env.example .env && edit .env      # then:
-export $(grep -v '^#' .env | xargs)
-
-# start SQL Server
-docker run -d --name sqlserver --platform linux/amd64 \
-  -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD="$MSSQL_SA_PASSWORD" \
-  -e MSSQL_PID=Developer -e MSSQL_MEMORY_LIMIT_MB=3072 \
-  -p 1433:1433 -v "$PWD":/project \
-  mcr.microsoft.com/mssql/server:2022-latest
-
-# create the database and schemas
-docker exec sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -b \
-  -i /project/scripts/init_database.sql
+psql -d postgres      -f scripts/init_database.sql          # create database + schemas (drops it if it exists)
+psql -d datawarehouse -f scripts/bronze/ddl_bronze.sql
+psql -d datawarehouse -f scripts/bronze/proc_load_bronze.sql  # load the six CSVs
+psql -d datawarehouse -f tests/quality_checks_bronze.sql      # every check should print PASS
+psql -d datawarehouse -f scripts/silver/ddl_silver.sql
+psql -d datawarehouse -f scripts/silver/proc_load_silver.sql
+psql -d datawarehouse -f scripts/gold/ddl_gold.sql             # star-schema views
 ```
 
-Connect a GUI client (Azure Data Studio, DBeaver, or the VS Code `mssql` extension) to
-`localhost,1433` as `sa`.
+> Use `psql`, not pgAdmin's Query Tool, for these scripts: `\c` and `\copy` are psql commands.
+> After the load, any client (pgAdmin, DBeaver) can query the `gold` views.
 
-> `BULK INSERT` executes inside the container and cannot see the host filesystem — all data paths
-> in the load scripts use the `/project/...` mount, not host paths.
+Tested end to end on PostgreSQL 16: all bronze quality checks pass, and `gold.fact_sales` holds
+60,398 rows with no orphan customer or product keys.
 
 ## Documentation
 

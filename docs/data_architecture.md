@@ -115,7 +115,7 @@ diff between layers is a diff in *cleanliness*, not in naming.
 
 ## Open
 
-- **Engine** — brief specifies SQL Server; PostgreSQL 15 is running locally and Docker is available.
-  Architecture above is engine-independent.
+- **Engine** — the course brief specified SQL Server; this build runs on PostgreSQL (13+).
+  The architecture above is engine-independent.
 - **Source CSVs** — not yet in `datasets/`. Final bronze table list may shift once the real files
   are inspected.

@@ -1,6 +1,6 @@
 /*
 ===============================================================================
-Quality Checks: Bronze Layer
+Quality Checks: Bronze Layer  (PostgreSQL)
 ===============================================================================
 Purpose:
     Verifies the bronze load was COMPLETE and STRUCTURALLY correct.
@@ -10,29 +10,26 @@ Purpose:
     and are silver's problem. What it checks is that ingestion did not lose,
     duplicate, or mangle anything.
 
-Usage:
-    Run after EXEC bronze.load_bronze;
+Usage (from the repo root, after loading bronze):
+    psql -d datawarehouse -f tests/quality_checks_bronze.sql
     Every check prints PASS or FAIL. Investigate any FAIL before building silver.
 ===============================================================================
 */
 
-USE datawarehouse;
-GO
-
-PRINT '==========================================================';
-PRINT 'Bronze Quality Checks';
-PRINT '==========================================================';
+\echo '=========================================================='
+\echo 'Bronze Quality Checks'
+\echo '=========================================================='
 
 -- ============================================================
 -- Check 1: Row completeness
 -- Expected counts are the source files' data rows (excluding header).
--- A count exactly one short usually means the file's final line lacks a
--- CRLF terminator — BULK INSERT drops it silently.
+-- A count exactly one short usually means a file's final line was lost —
+-- the original SQL Server load (BULK INSERT) dropped unterminated last lines.
 -- ============================================================
-PRINT '';
-PRINT '--- Check 1: Row counts vs source files ---';
+\echo ''
+\echo '--- Check 1: Row counts vs source files ---'
 
-;WITH expected AS (
+WITH expected AS (
     SELECT 'crm_cust_info'     AS tbl, 18494 AS expected_rows
     UNION ALL SELECT 'crm_prd_info',        397
     UNION ALL SELECT 'crm_sales_details', 60398
@@ -58,28 +55,32 @@ ORDER BY e.tbl;
 
 -- ============================================================
 -- Check 2: No table loaded empty
--- Catches a silently failed BULK INSERT or a wrong file path.
+-- Catches a silently failed load or a wrong file path.
 -- ============================================================
-PRINT '';
-PRINT '--- Check 2: No empty tables ---';
+\echo ''
+\echo '--- Check 2: No empty tables ---'
 
-SELECT  t.name AS tbl,
-        SUM(p.rows) AS row_count,
-        CASE WHEN SUM(p.rows) > 0 THEN 'PASS' ELSE 'FAIL - table is empty' END AS result
-FROM    sys.tables t
-JOIN    sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0,1)
-WHERE   t.schema_id = SCHEMA_ID('bronze')
-GROUP BY t.name
-ORDER BY t.name;
+SELECT  tbl,
+        row_count,
+        CASE WHEN row_count > 0 THEN 'PASS' ELSE 'FAIL - table is empty' END AS result
+FROM (
+    SELECT 'crm_cust_info'     AS tbl, COUNT(*) AS row_count FROM bronze.crm_cust_info
+    UNION ALL SELECT 'crm_prd_info',      COUNT(*) FROM bronze.crm_prd_info
+    UNION ALL SELECT 'crm_sales_details', COUNT(*) FROM bronze.crm_sales_details
+    UNION ALL SELECT 'erp_cust_az12',     COUNT(*) FROM bronze.erp_cust_az12
+    UNION ALL SELECT 'erp_loc_a101',      COUNT(*) FROM bronze.erp_loc_a101
+    UNION ALL SELECT 'erp_px_cat_g1v2',   COUNT(*) FROM bronze.erp_px_cat_g1v2
+) counts
+ORDER BY tbl;
 
 -- ============================================================
 -- Check 3: Column shift detection
--- If FIELDTERMINATOR or ROWTERMINATOR were wrong, values land in the wrong
+-- If the delimiter or line endings were misread, values land in the wrong
 -- columns. These assertions test that each key column still holds the KIND of
 -- value it should — a cheap smoke test for misalignment.
 -- ============================================================
-PRINT '';
-PRINT '--- Check 3: Columns hold the expected kind of value ---';
+\echo ''
+\echo '--- Check 3: Columns hold the expected kind of value ---'
 
 -- Every REAL customer row (one with a cst_id) must have an AW-prefixed key.
 -- The 4 junk rows in the source have no cst_id and a garbage key; they are
@@ -121,8 +122,8 @@ SELECT 'erp_loc_a101.cid contains a dash (format preserved)',
 -- files, so they MUST still be present. If any of these "improved", bronze
 -- is transforming data and violating the architecture.
 -- ============================================================
-PRINT '';
-PRINT '--- Check 4: Source defects preserved (bronze must not clean) ---';
+\echo ''
+\echo '--- Check 4: Source defects preserved (bronze must not clean) ---'
 
 SELECT 'duplicate/blank cst_id still present' AS assertion,
        CASE WHEN (SELECT COUNT(*) FROM bronze.crm_cust_info) >
@@ -164,11 +165,11 @@ SELECT '4 junk customer rows preserved',
 
 -- ============================================================
 -- Check 5: Blank numerics are NULL, not fabricated zeros
--- BULK INSERT applies the column default to an empty field; with no default
--- defined that is NULL. A 0 here would be an invented value.
+-- COPY in CSV format loads an empty unquoted field as NULL. A 0 here would be
+-- an invented value.
 -- ============================================================
-PRINT '';
-PRINT '--- Check 5: Missing numerics are NULL, not 0 ---';
+\echo ''
+\echo '--- Check 5: Missing numerics are NULL, not 0 ---'
 
 SELECT 'crm_cust_info.cst_id blanks are NULL' AS assertion,
        CASE WHEN (SELECT COUNT(*) FROM bronze.crm_cust_info WHERE cst_id = 0) = 0
@@ -178,8 +179,7 @@ SELECT 'crm_prd_info.prd_cost blanks are NULL',
        CASE WHEN (SELECT COUNT(*) FROM bronze.crm_prd_info WHERE prd_cost = 0) = 0
        THEN 'PASS' ELSE 'FAIL - blanks became 0' END;
 
-PRINT '';
-PRINT '==========================================================';
-PRINT 'Bronze quality checks complete';
-PRINT '==========================================================';
-GO
+\echo ''
+\echo '=========================================================='
+\echo 'Bronze quality checks complete'
+\echo '=========================================================='

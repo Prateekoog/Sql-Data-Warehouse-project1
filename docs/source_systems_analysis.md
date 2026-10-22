@@ -144,7 +144,7 @@ Clean. No defects found — `CAT`, `SUBCAT`, `MAINTENANCE` are all consistent. L
 ## File format issue found during ingestion
 
 Three files — `cust_info.csv`, `CUST_AZ12.csv`, `PX_CAT_G1V2.csv` — had **no trailing newline** on
-their final line. `BULK INSERT` with `ROWTERMINATOR = '0x0d0a'` silently discards a final row that
+their final line. In the original SQL Server load, `BULK INSERT` with `ROWTERMINATOR = '0x0d0a'` silently discards a final row that
 has no terminator: no error, no warning, one row short.
 
 Fixed by appending `\r\n` to each of the three files. No data value was altered.
